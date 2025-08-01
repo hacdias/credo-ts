@@ -26,7 +26,11 @@ import {
   getAuthorizationServerMetadataFromList,
   preAuthorizedCodeGrantIdentifier,
 } from '@openid4vc/oauth2'
-import { determineAuthorizationServerForCredentialOffer, parseKeyAttestationJwt } from '@openid4vc/openid4vci'
+import {
+  DeferredCredentialResponse,
+  determineAuthorizationServerForCredentialOffer,
+  parseKeyAttestationJwt,
+} from '@openid4vc/openid4vci'
 import {
   AuthorizationFlow,
   CredentialResponse,
@@ -45,6 +49,8 @@ import type {
   OpenId4VciAuthCodeFlowOptions,
   OpenId4VciCredentialBindingResolver,
   OpenId4VciCredentialResponse,
+  OpenId4VciDeferredCredentialRequestOptions,
+  OpenId4VciDeferredCredentialResponse,
   OpenId4VciDpopRequestOptions,
   OpenId4VciProofOfPossessionRequirements,
   OpenId4VciResolvedAuthorizationRequest,
@@ -390,6 +396,7 @@ export class OpenId4VciHolderService {
     }
 
     const receivedCredentials: Array<OpenId4VciCredentialResponse> = []
+    const deferredCredentials: Array<OpenId4VciDeferredCredentialResponse> = []
     let cNonce = options.cNonce
     let dpopNonce = options.dpop?.nonce
 
@@ -439,7 +446,7 @@ export class OpenId4VciHolderService {
 
     for (const [offeredCredentialId, offeredCredentialConfiguration] of credentialConfigurationsToRequest) {
       const proofs = await this.getCredentialRequestOptions(agentContext, {
-        allowedProofOfPossesionAlgorithms:
+        allowedProofOfPossessionAlgorithms:
           allowedProofOfPossessionSignatureAlgorithms ?? getSupportedJwaSignatureAlgorithms(agentContext),
         metadata,
         offeredCredential: {
@@ -452,7 +459,7 @@ export class OpenId4VciHolderService {
         credentialBindingResolver,
       })
 
-      this.logger.debug('Generated credential request proof of possesion', { proofs })
+      this.logger.debug('Generated credential request proof of possession', { proofs })
 
       const proof =
         // Draft 11 ALWAYS uses proof
@@ -487,26 +494,40 @@ export class OpenId4VciHolderService {
       cNonce = credentialResponse.c_nonce
       dpopNonce = dpop?.nonce
 
-      // Create credential, but we don't store it yet (only after the user has accepted the credential)
-      const credential = await this.handleCredentialResponse(agentContext, credentialResponse, {
-        verifyCredentialStatus: verifyCredentialStatus ?? false,
-        credentialIssuerMetadata: metadata.credentialIssuer,
-        format: offeredCredentialConfiguration.format as OpenId4VciCredentialFormatProfile,
-        credentialConfigurationId: offeredCredentialId,
-        credentialConfiguration: offeredCredentialConfiguration,
-      })
+      if (credentialResponse.transaction_id) {
+        const deferredCredential = {
+          credentialConfigurationId: offeredCredentialId,
+          credentialConfiguration: offeredCredentialConfiguration,
+          transactionId: credentialResponse.transaction_id,
+          interval: credentialResponse.interval,
+          notificationId: credentialResponse.notification_id,
+        }
 
-      this.logger.debug(
-        'received credential',
-        credential.credentials.map((c) =>
-          c instanceof Mdoc ? { issuerSignedNamespaces: c.issuerSignedNamespaces, base64Url: c.base64Url } : c
+        this.logger.debug('received deferred credential', deferredCredential)
+        deferredCredentials.push(deferredCredential)
+      } else {
+        // Create credential, but we don't store it yet (only after the user has accepted the credential)
+        const credential = await this.handleCredentialResponse(agentContext, credentialResponse, {
+          verifyCredentialStatus: verifyCredentialStatus ?? false,
+          credentialIssuerMetadata: metadata.credentialIssuer,
+          format: offeredCredentialConfiguration.format as OpenId4VciCredentialFormatProfile,
+          credentialConfigurationId: offeredCredentialId,
+          credentialConfiguration: offeredCredentialConfiguration,
+        })
+
+        this.logger.debug(
+          'received credential',
+          credential.credentials.map((c) =>
+            c instanceof Mdoc ? { issuerSignedNamespaces: c.issuerSignedNamespaces, base64Url: c.base64Url } : c
+          )
         )
-      )
-      receivedCredentials.push(credential)
+        receivedCredentials.push(credential)
+      }
     }
 
     return {
       credentials: receivedCredentials,
+      deferredCredentials,
       dpop: options.dpop
         ? {
             ...options.dpop,
@@ -514,6 +535,82 @@ export class OpenId4VciHolderService {
           }
         : undefined,
       cNonce,
+    }
+  }
+
+  public async acceptDeferredCredentialOffer(
+    agentContext: AgentContext,
+    options: OpenId4VciDeferredCredentialRequestOptions
+  ) {
+    const { issuerMetadata, deferredCredentialRequests } = options
+    const client = this.getClient(agentContext)
+
+    const receivedCredentials: Array<OpenId4VciCredentialResponse> = []
+    const deferredCredentials: Array<OpenId4VciDeferredCredentialResponse> = []
+    let dpopNonce = options.dpop?.nonce
+
+    for (const {
+      transactionId,
+      credentialConfiguration,
+      credentialConfigurationId,
+      verifyCredentialStatus,
+    } of deferredCredentialRequests) {
+      const { deferredCredentialResponse, dpop } = await client.retrieveDeferredCredentials({
+        issuerMetadata,
+        accessToken: options.accessToken,
+        transactionId: transactionId,
+        dpop: options.dpop
+          ? await this.getDpopOptions(agentContext, {
+              ...options.dpop,
+              nonce: dpopNonce,
+              dpopSigningAlgValuesSupported: [options.dpop.alg],
+            })
+          : undefined,
+      })
+
+      // Set new nonce values
+      dpopNonce = dpop?.nonce
+
+      if (deferredCredentialResponse.interval) {
+        const deferredCredential: OpenId4VciDeferredCredentialResponse = {
+          credentialConfigurationId,
+          credentialConfiguration,
+          transactionId,
+          interval: deferredCredentialResponse.interval,
+          notificationId: deferredCredentialResponse.notification_id,
+        }
+
+        this.logger.debug('received deferred credential', deferredCredential)
+        deferredCredentials.push(deferredCredential)
+      } else {
+        // Create credential, but we don't store it yet (only after the user has accepted the credential)
+        const credential = await this.handleCredentialResponse(agentContext, deferredCredentialResponse, {
+          verifyCredentialStatus: verifyCredentialStatus ?? false,
+          credentialIssuerMetadata: issuerMetadata.credentialIssuer,
+          format: credentialConfiguration.format as OpenId4VciCredentialFormatProfile,
+          credentialConfigurationId: credentialConfigurationId,
+          credentialConfiguration: credentialConfiguration,
+        })
+
+        this.logger.debug(
+          'received credential',
+          credential.credentials.map((c) =>
+            c instanceof Mdoc ? { issuerSignedNamespaces: c.issuerSignedNamespaces, base64Url: c.base64Url } : c
+          )
+        )
+        receivedCredentials.push(credential)
+      }
+    }
+
+    return {
+      credentials: receivedCredentials,
+      deferredCredentials,
+      dpop: options.dpop
+        ? {
+            ...options.dpop,
+            nonce: dpopNonce,
+          }
+        : undefined,
     }
   }
 
@@ -528,7 +625,7 @@ export class OpenId4VciHolderService {
     options: {
       metadata: OpenId4VciResolvedCredentialOffer['metadata']
       credentialBindingResolver: OpenId4VciCredentialBindingResolver
-      allowedProofOfPossesionAlgorithms: Kms.KnownJwaSignatureAlgorithm[]
+      allowedProofOfPossessionAlgorithms: Kms.KnownJwaSignatureAlgorithm[]
       clientId?: string
       cNonce: string
       offeredCredential: {
@@ -538,7 +635,7 @@ export class OpenId4VciHolderService {
     }
   ) {
     const dids = agentContext.resolve(DidsApi)
-    const { allowedProofOfPossesionAlgorithms, offeredCredential } = options
+    const { allowedProofOfPossessionAlgorithms: allowedProofOfPossesionAlgorithms, offeredCredential } = options
     const { configuration, id: configurationId } = offeredCredential
     const supportedJwaSignatureAlgorithms = getSupportedJwaSignatureAlgorithms(agentContext)
 
@@ -921,7 +1018,7 @@ export class OpenId4VciHolderService {
 
   private async handleCredentialResponse(
     agentContext: AgentContext,
-    credentialResponse: CredentialResponse,
+    credentialResponse: CredentialResponse | DeferredCredentialResponse,
     options: {
       verifyCredentialStatus: boolean
       credentialIssuerMetadata: OpenId4VciCredentialIssuerMetadata

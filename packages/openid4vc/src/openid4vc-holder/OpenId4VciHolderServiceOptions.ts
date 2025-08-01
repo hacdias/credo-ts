@@ -62,6 +62,14 @@ export interface OpenId4VciCredentialResponse {
   notificationId?: string
 }
 
+export interface OpenId4VciDeferredCredentialResponse {
+  credentialConfigurationId: string
+  credentialConfiguration: OpenId4VciCredentialConfigurationSupportedWithFormats
+  transactionId: string
+  interval?: number
+  notificationId?: string
+}
+
 export interface OpenId4VciResolvedCredentialOffer {
   metadata: IssuerMetadataResult
   credentialOfferPayload: CredentialOfferObject
@@ -249,6 +257,23 @@ export interface OpenId4VciAcceptCredentialOfferOptions {
    * for the proof of possession signature.
    */
   credentialBindingResolver: OpenId4VciCredentialBindingResolver
+}
+
+export interface OpenId4VciDeferredCredentialRequest {
+  credentialConfigurationId: string
+  credentialConfiguration: OpenId4VciCredentialConfigurationSupportedWithFormats
+  transactionId: string
+  verifyCredentialStatus: boolean
+}
+
+/**
+ * Options to request deferred credentials from the issuer.
+ */
+export interface OpenId4VciDeferredCredentialRequestOptions {
+  issuerMetadata: IssuerMetadataResult
+  deferredCredentialRequests: OpenId4VciDeferredCredentialRequest[]
+  accessToken: string
+  dpop?: OpenId4VciDpopRequestOptions
 }
 
 /**
