@@ -1,5 +1,5 @@
 import { DecodedSDJwt, decodeSdJwtSync } from '@sd-jwt/decode'
-import { CredoError } from 'packages/core/src/error'
+import { CredoError } from '../../../error'
 import { ClaimFormat } from '../models/ClaimFormat'
 import { W3cV2Credential } from '../models/credential/W3cV2Credential'
 import { getCredentialFromSdJwtPayload, sdJwtVcHasher } from './credentialTransformer'
@@ -39,10 +39,12 @@ export class W3cV2SdJwtVerifiableCredential {
   }
 
   /**
-   * The {@link ClaimFormat} of the credential. For SD-JWT credentials this is always `vc+sd-jwt`.
+   * The {@link ClaimFormat} of the credential.
+   *
+   * For W3C VC SD-JWT credentials this is always `vc+sd-jwt`.
    */
-  public get claimFormat(): ClaimFormat.SdJwtVc {
-    return ClaimFormat.SdJwtVc
+  public get claimFormat(): ClaimFormat.SdJwtW3cVc {
+    return ClaimFormat.SdJwtW3cVc
   }
 
   public get dataUri(): string {

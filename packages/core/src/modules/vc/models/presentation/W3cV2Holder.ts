@@ -2,7 +2,7 @@ import type { ValidationOptions } from 'class-validator'
 
 import { Transform, TransformationType } from 'class-transformer'
 import { IsOptional, IsUrl, ValidateBy, buildMessage, isInstance, isString, isURL } from 'class-validator'
-import { CredoError } from 'packages/core/src/error'
+import { CredoError } from '../../../../error'
 
 export interface W3cV2HolderOptions {
   id: string

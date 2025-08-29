@@ -31,7 +31,7 @@ export function IsCredentialJsonLdContext(
       name: 'IsCredentialJsonLdContext',
       validator: {
         validate: (value): boolean => {
-          if (!Array.isArray(value)) allowString && isString(value) && value === credentialContext
+          if (!Array.isArray(value)) return allowString && isString(value) && value === credentialContext
 
           // First item must be the verifiable credential context
           if (value[0] !== credentialContext) return false

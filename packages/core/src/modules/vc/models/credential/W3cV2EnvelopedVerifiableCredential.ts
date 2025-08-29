@@ -1,6 +1,6 @@
 import { Expose } from 'class-transformer'
 import { IsDataURI, IsOptional, ValidateBy, ValidationOptions, buildMessage } from 'class-validator'
-import { CredoError } from 'packages/core/src/error'
+import { CredoError } from '../../../../error'
 import type { JsonObject, SingleOrArray } from '../../../../types'
 import { CREDENTIALS_CONTEXT_V2_URL, ENVELOPED_VERIFIABLE_CREDENTIAL_TYPE } from '../../constants'
 import { W3cV2SdJwtVerifiableCredential } from '../../sd-jwt-vc'

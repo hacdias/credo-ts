@@ -12,6 +12,7 @@ export enum ClaimFormat {
   Di = 'di',
   DiVc = 'di_vc',
   DiVp = 'di_vp',
-  SdJwtVc = 'vc+sd-jwt',
+  SdJwtDc = 'dc+sd-jwt',
+  SdJwtW3cVc = 'vc+sd-jwt',
   MsoMdoc = 'mso_mdoc',
 }
