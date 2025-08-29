@@ -14,6 +14,8 @@ export interface W3cV2EnvelopedVerifiableCredentialOptions {
 }
 
 export class W3cV2EnvelopedVerifiableCredential {
+  private _credential?: W3cV2SdJwtVerifiableCredential
+
   public constructor(options: W3cV2EnvelopedVerifiableCredentialOptions) {
     if (options) {
       const { id, context, type, ...properties } = options
@@ -42,6 +44,9 @@ export class W3cV2EnvelopedVerifiableCredential {
   // how to solve this and ensure correct transformations?
   // Maybe replace IsDataURI above by custom validator that checks the format?
   public get credential() {
+    // Only parse once!
+    if (this._credential) return this._credential
+
     const uri = this.id
     if (!uri.startsWith('data:')) {
       throw new CredoError('Invalid Enveloped Verifiable Credential: "id" is not a valid data URI')
@@ -58,11 +63,14 @@ export class W3cV2EnvelopedVerifiableCredential {
 
     switch (mimetype) {
       case 'application/vc+sd-jwt':
-        return W3cV2SdJwtVerifiableCredential.fromCompact(data)
+        this._credential = W3cV2SdJwtVerifiableCredential.fromCompact(data)
+        break
 
       default:
         throw new CredoError(`Unsupported Enveloped Verifiable Credential: ${mimetype} not recognized`)
     }
+
+    return this._credential
   }
 }
 

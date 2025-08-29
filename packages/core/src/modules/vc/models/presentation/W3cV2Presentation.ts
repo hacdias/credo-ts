@@ -1,4 +1,4 @@
-import { Expose, Type } from 'class-transformer'
+import { Expose } from 'class-transformer'
 import { IsOptional, ValidateNested } from 'class-validator'
 import type { JsonObject, SingleOrArray } from '../../../../types'
 import { JsonTransformer } from '../../../../utils'
@@ -6,6 +6,10 @@ import { IsInstanceOrArrayOfInstances, IsUri } from '../../../../utils/validator
 import { CREDENTIALS_CONTEXT_V2_URL, VERIFIABLE_PRESENTATION_TYPE } from '../../constants'
 import { IsCredentialJsonLdContext, IsVerifiablePresentationType } from '../../validators'
 import { W3cV2EnvelopedVerifiableCredential } from '../credential'
+import {
+  W3cV2VerifiableCredential,
+  W3cV2VerifiableCredentialTransformer,
+} from '../credential/W3cV2VerifiableCredential'
 import { IsW3cV2Holder, W3cV2Holder, W3cV2HolderOptions, W3cV2HolderTransformer } from './W3cV2Holder'
 import { W3cV2JsonPresentation } from './W3cV2JsonPresentation'
 
@@ -13,10 +17,7 @@ export interface W3cV2PresentationOptions {
   id?: string
   context?: Array<string | JsonObject>
   type?: Array<string>
-
-  // TODO: should we support other types of verifiable credentials here?
-  // Like plain ones without enveloping?
-  verifiableCredential: SingleOrArray<W3cV2EnvelopedVerifiableCredential>
+  verifiableCredential: SingleOrArray<W3cV2VerifiableCredential>
   holder?: string | W3cV2HolderOptions
 }
 
@@ -50,10 +51,10 @@ export class W3cV2Presentation {
   @IsOptional()
   public holder?: string | W3cV2Holder
 
-  @Type(() => W3cV2EnvelopedVerifiableCredential)
+  @W3cV2VerifiableCredentialTransformer()
   @IsInstanceOrArrayOfInstances({ classType: [W3cV2EnvelopedVerifiableCredential] })
   @ValidateNested({ each: true })
-  public verifiableCredential!: SingleOrArray<W3cV2EnvelopedVerifiableCredential>
+  public verifiableCredential!: SingleOrArray<W3cV2VerifiableCredential>
 
   public get holderId(): string | null {
     if (!this.holder) return null
